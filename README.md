@@ -4,6 +4,47 @@
 
 A minimal movie tracking app that caches TMDB data locally. Search once, store forever. Mobile-first design.
 
+## 🚀 Quick Start
+
+### Prerequisites
+- Free TMDB API key from [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)
+- PocketBase backend (local or Google Cloud Run)
+- Netlify account for frontend deployment
+
+### Deployment Options
+
+#### Backend: PocketBase
+**Option A - Local Development:**
+```bash
+# Download PocketBase
+wget https://github.com/pocketbase/pocketbase/releases/download/v0.22.0/pocketbase_0.22.0_darwin_amd64.zip
+unzip pocketbase_0.22.0_darwin_amd64.zip
+./pocketbase serve
+# Access admin UI at http://127.0.0.1:8090/_/
+```
+
+**Option B - Production (Google Cloud Run - Free Tier):**
+- 2M requests/month free
+- Always-on, auto-scaling
+- See [PocketBase production guide](https://pocketbase.io/docs/going-to-production/)
+- Use Cloud Storage bucket for persistent data
+
+#### Frontend: Netlify
+1. Push code to GitHub
+2. Connect repository to [Netlify](https://netlify.com)
+3. Configure: 
+   - Publish directory: `.` (root)
+   - Build command: (leave empty)
+4. Update `PB_URL` in your HTML to point to PocketBase instance
+5. Configure CORS in PocketBase settings with your Netlify domain
+
+### Configuration
+Update these values in your HTML file:
+```javascript
+const PB_URL = 'https://your-pocketbase.run.app'; // or http://127.0.0.1:8090 for local
+const TMDB_KEY = 'your_tmdb_api_key_here';
+```
+
 ## 🎯 Architecture Decision
 
 **Why cache TMDB movies in our database?**
