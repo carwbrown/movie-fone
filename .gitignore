@@ -1,0 +1,16 @@
+# API Keys - DO NOT COMMIT
+.env
+scripts/config.js
+
+# PocketBase data
+pb_data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

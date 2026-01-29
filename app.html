@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Movie Fone - My Movies</title>
+  <style>
+    :root {
+      --bg-primary: #0a192f;
+      --bg-secondary: #112240;
+      --text-primary: #ccd6f6;
+      --text-secondary: #8892b0;
+      --accent: #64ffda;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--bg-secondary);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(100, 255, 218, 0.1);
+    }
+
+    .logo { font-size: 1.5rem; color: var(--accent); }
+
+    nav { display: flex; gap: 1rem; align-items: center; }
+
+    nav a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    nav a:hover, nav a.active {
+      color: var(--accent);
+      background: rgba(100, 255, 218, 0.1);
+    }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--text-secondary);
+      color: var(--text-secondary);
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-logout:hover {
+      border-color: #ff6b6b;
+      color: #ff6b6b;
+    }
+
+    main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+    .search-section { margin-bottom: 2rem; }
+
+    .search-box {
+      display: flex;
+      gap: 1rem;
+      max-width: 600px;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid rgba(100, 255, 218, 0.2);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 1rem;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .search-box button {
+      padding: 0.75rem 1.5rem;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .search-box button:hover {
+      background: rgba(100, 255, 218, 0.1);
+    }
+
+    h2 {
+      color: var(--text-primary);
+      margin-bottom: 1.5rem;
+      font-size: 1.5rem;
+    }
+
+    .movie-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state p { margin-bottom: 1rem; }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">🎬 Movie Fone</div>
+    <nav>
+      <a href="#" class="active">My Movies</a>
+      <a href="#watchlist">Watchlist</a>
+      <button class="btn-logout" id="logout-btn">Sign Out</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="search-section">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search for movies...">
+        <button id="search-btn">Search</button>
+      </div>
+    </section>
+
+    <section id="search-results" style="display: none;">
+      <h2>Search Results</h2>
+      <div class="movie-grid" id="search-grid"></div>
+    </section>
+
+    <section id="my-movies">
+      <h2>My Movies</h2>
+      <div class="movie-grid" id="movies-grid">
+        <div class="loading">Loading your movies...</div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { requireAuth, logout, getCurrentUser } from './scripts/auth.js';
+    import { pb } from './scripts/pb.js';
+    import { searchMovies, isTMDBConfigured, addToMyMovies } from './scripts/tmdb.js';
+    import './components/movie-card.js';
+
+    // Check auth
+    if (!requireAuth()) {
+      // Will redirect to login
+    }
+
+    const user = getCurrentUser();
+    console.log('Logged in as:', user?.email);
+
+    // Logout handler
+    document.getElementById('logout-btn').addEventListener('click', logout);
+
+    // Load user's movies
+    async function loadMyMovies() {
+      const grid = document.getElementById('movies-grid');
+
+      try {
+        const records = await pb.collection('user_movies').getList(1, 50, {
+          filter: `user = "${user.id}"`,
+          expand: 'movie'
+        });
+
+        if (records.items.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-state">
+              <p>You haven't added any movies yet.</p>
+              <p>Search for movies above to get started!</p>
+            </div>
+          `;
+          return;
+        }
+
+        grid.innerHTML = '';
+        records.items.forEach(item => {
+          const movie = item.expand?.movie;
+          if (movie) {
+            const card = document.createElement('movie-card');
+            card.movie = movie;
+            card.userMovie = item;
+            grid.appendChild(card);
+          }
+        });
+      } catch (error) {
+        console.error('Error loading movies:', error);
+        grid.innerHTML = `
+          <div class="empty-state">
+            <p>Could not load movies. Is PocketBase running?</p>
+            <p style="font-size: 0.875rem; margin-top: 0.5rem;">${error.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    // Handle adding a movie to user's collection
+    async function handleAddMovie(movie) {
+      // First, ensure movie is in our cache and get its PocketBase ID
+      let pbMovie;
+      try {
+        const existing = await pb.collection('movies').getList(1, 1, {
+          filter: `tmdb_id = ${movie.tmdb_id}`
+        });
+
+        if (existing.items.length > 0) {
+          pbMovie = existing.items[0];
+        } else {
+          // Create in PocketBase
+          pbMovie = await pb.collection('movies').create(movie);
+        }
+      } catch (error) {
+        console.error('Error caching movie:', error);
+        alert('Failed to add movie. Please try again.');
+        return;
+      }
+
+      // Add to user's collection
+      const result = await addToMyMovies(user.id, pbMovie.id);
+
+      if (result.success) {
+        alert(`Added "${movie.title}" to your collection!`);
+        loadMyMovies(); // Refresh the list
+      } else {
+        alert(result.error || 'Failed to add movie');
+      }
+    }
+
+    // Search handler - uses TMDB
+    document.getElementById('search-btn').addEventListener('click', async () => {
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+
+      const resultsSection = document.getElementById('search-results');
+      const searchGrid = document.getElementById('search-grid');
+
+      resultsSection.style.display = 'block';
+      searchGrid.innerHTML = '<div class="loading">Searching...</div>';
+
+      const movies = await searchMovies(query);
+
+      if (movies.length === 0) {
+        searchGrid.innerHTML = `
+          <div class="empty-state">
+            <p>No movies found for "${query}"</p>
+            ${!isTMDBConfigured() ? '<p style="font-size: 0.875rem;">Note: Add your TMDB API key to scripts/config.js</p>' : ''}
+          </div>
+        `;
+        return;
+      }
+
+      searchGrid.innerHTML = '';
+      movies.forEach(movie => {
+        const card = document.createElement('movie-card');
+        card.movie = movie;
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => handleAddMovie(movie));
+        searchGrid.appendChild(card);
+      });
+    });
+
+    // Enter key search
+    document.getElementById('search-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('search-btn').click();
+      }
+    });
+
+    // Initial load
+    loadMyMovies();
+  </script>
+</body>
+</html>
