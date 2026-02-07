@@ -49,8 +49,8 @@
 - [x] Create `scripts/config.example.js` template file
 
 ### Deployment
-- [ ] Deploy PocketBase to GCP
-- [ ] Update `scripts/config.js` with production URL
+- [x] Deploy PocketBase to GCP
+- [x] Update `scripts/config.js` with production URL
 - [ ] Test production environment
 - [ ] Set up automatic backups
 
