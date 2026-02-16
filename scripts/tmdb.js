@@ -18,6 +18,18 @@ export const backdropUrl = (path, size = 'original') =>
   path ? `${TMDB_IMAGE_BASE}/${size}${path}` : null;
 
 /**
+ * Validate TMDB API key is configured
+ * @returns {boolean} - True if API key is valid
+ */
+function validateAPIKey() {
+  if (!TMDB_API_KEY || TMDB_API_KEY === 'YOUR_TMDB_API_KEY_HERE') {
+    console.error('TMDB API key not configured. Add it to scripts/config.js');
+    return false;
+  }
+  return true;
+}
+
+/**
  * Search for movies - checks local cache first, then TMDB
  */
 export async function searchMovies(query) {
@@ -46,10 +58,7 @@ export async function searchMovies(query) {
  * Search TMDB directly
  */
 export async function searchTMDB(query) {
-  if (!TMDB_API_KEY || TMDB_API_KEY === 'YOUR_TMDB_API_KEY_HERE') {
-    console.error('TMDB API key not configured. Add it to scripts/config.js');
-    return [];
-  }
+  if (!validateAPIKey()) return [];
 
   try {
     const response = await fetch(
@@ -78,10 +87,7 @@ export async function searchTMDB(query) {
  * Get movie details from TMDB
  */
 export async function getMovieDetails(tmdbId) {
-  if (!TMDB_API_KEY || TMDB_API_KEY === 'YOUR_TMDB_API_KEY_HERE') {
-    console.error('TMDB API key not configured');
-    return null;
-  }
+  if (!validateAPIKey()) return null;
 
   try {
     const response = await fetch(
@@ -104,10 +110,7 @@ export async function getMovieDetails(tmdbId) {
  * Get popular movies (for seeding/discovery)
  */
 export async function getPopularMovies(page = 1) {
-  if (!TMDB_API_KEY || TMDB_API_KEY === 'YOUR_TMDB_API_KEY_HERE') {
-    console.error('TMDB API key not configured');
-    return [];
-  }
+  if (!validateAPIKey()) return [];
 
   try {
     const response = await fetch(
@@ -151,24 +154,45 @@ function transformTMDBMovie(movie, includeDetails = false) {
 
 /**
  * Cache movies to PocketBase (background operation)
+ * PERFORMANCE FIX: Batch query instead of N+1 queries
  */
 async function cacheMovies(tmdbMovies) {
-  for (const movie of tmdbMovies) {
-    try {
-      // Check if already cached
-      const existing = await pb.collection('movies').getList(1, 1, {
-        filter: `tmdb_id = ${movie.id}`
-      });
+  if (tmdbMovies.length === 0) return;
 
-      if (existing.items.length === 0) {
-        // Not cached, add it
+  try {
+    // BEFORE: For 20 movies, made 40 queries (20 checks + up to 20 inserts)
+    // AFTER: 1 batch query + N inserts for new movies only
+
+    // Build filter to check all movies at once
+    const tmdbIds = tmdbMovies.map(m => m.id);
+    const filterStr = tmdbIds.map(id => `tmdb_id = ${id}`).join(' || ');
+
+    // Single query to check which movies already exist
+    const existing = await pb.collection('movies').getList(1, 200, {
+      filter: filterStr
+    });
+
+    // Build set of existing IDs for fast lookup
+    const existingIds = new Set(existing.items.map(m => m.tmdb_id));
+
+    // Only insert movies we don't have yet
+    const newMovies = tmdbMovies.filter(m => !existingIds.has(m.id));
+
+    for (const movie of newMovies) {
+      try {
         await pb.collection('movies').create(transformTMDBMovie(movie));
         console.log(`Cached: ${movie.title}`);
+      } catch (error) {
+        // Ignore individual cache errors (race conditions, etc.)
+        console.log(`Cache skip: ${movie.title}`);
       }
-    } catch (error) {
-      // Ignore cache errors, they're not critical
-      console.log(`Cache skip: ${movie.title}`);
     }
+
+    if (newMovies.length > 0) {
+      console.log(`Cached ${newMovies.length} new movies`);
+    }
+  } catch (error) {
+    console.log('Cache batch operation failed:', error.message);
   }
 }
 
